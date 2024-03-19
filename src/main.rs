@@ -4,6 +4,7 @@ type VarId = usize;
 
 enum Step {
     LineSectPoints(VarId, VarId),
+    CircAtSect(VarId, VarId),
 }
 
 #[derive(Clone, Copy)]
@@ -32,14 +33,41 @@ struct Builder {
     steps: Vec<Step>,
 
     constructs: Vec<Construct>,
+    selected_input: usize,
 }
 
 impl Builder {
+    pub fn update(&mut self, rl: &RaylibHandle) {
+        let mouse = rl.get_mouse_position();
+        
+        if !rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
+            self.selected_input = !0usize;
+        } else if self.selected_input != !0usize {
+            self.inputs[self.selected_input] = mouse;
+        }
+        
+        for (i, input) in self.inputs.iter_mut().enumerate() {
+            if mouse.distance_to(*input) < 6.9 {
+                if !rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
+                    self.selected_input = i;
+                }
+                break;
+            }
+        }
+
+        self.build();
+    }
+
     pub fn build(&mut self) {
+        self.constructs.clear();
+
         for step in &self.steps {
             match step {
                 Step::LineSectPoints(a, b) => {
                     self.constructs.push(Construct::Line(Line { pos: self.inputs[*a], dir: (self.inputs[*b] - self.inputs[*a]).normalized(),}));
+                }
+                Step::CircAtSect(at, sect) => {
+                    self.constructs.push(Construct::Circle(Circle { pos: self.inputs[*at], radius: self.inputs[*at].distance_to(self.inputs[*sect]),}));
                 }
             }
         }
@@ -60,8 +88,8 @@ impl Builder {
             }
         }
 
-        for &input in &self.inputs {
-            d.draw_circle_v(input, 5.0, Color::RED);
+        for (i, &input) in self.inputs.iter().enumerate() {
+            d.draw_circle_v(input, if i == self.selected_input { 7.0 } else { 5.0 }, Color::RED);
         }
     }
 }
@@ -70,14 +98,20 @@ fn main() {
     let (mut rl, thread) = raylib::init().size(640, 480).title("Hello, world!").build();
 
     let mut builder = Builder {
-        inputs: vec![Vector2::new(3.0,3.0),Vector2::new(300.0,300.0)],
-        steps: vec![Step::LineSectPoints(0, 1)],
+        inputs: vec![Vector2::new(50.0, 100.0), Vector2::new(300.0, 300.0), Vector2::new(300.0, 300.0)],
+        steps: vec![
+            Step::LineSectPoints(0, 1),
+            Step::CircAtSect(0, 2),
+        ],
         constructs: Vec::new(),
+        selected_input: !0usize,
     };
 
     builder.build();
 
     while !rl.window_should_close() {
+        builder.update(&rl);
+
         let mut d = rl.begin_drawing(&thread);
 
         d.clear_background(Color::new(64, 64, 64, 255));
