@@ -3,6 +3,32 @@ use raylib::prelude::*;
 type VarId = usize;
 
 #[derive(Clone, Copy)]
+enum InputKind {
+    Free,
+    Sect(VarId),
+}
+
+struct Input {
+    pos: Vector2,
+    kind: InputKind,
+}
+
+impl Input {
+    pub fn free(pos: Vector2) -> Self {
+        Self {
+            pos,
+            kind: InputKind::Free,
+        }
+    }
+    pub fn sect(pos: Vector2, sect: VarId) -> Self {
+        Self {
+            pos,
+            kind: InputKind::Sect(sect),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 enum Step {
     LineSectPoints(VarId, VarId),
     CircAtSect(VarId, VarId),
@@ -31,7 +57,7 @@ struct Circle {
 }
 
 struct Builder {
-    inputs: Vec<Vector2>,
+    inputs: Vec<Input>,
     steps: Vec<Step>,
 
     constructs: Vec<Construct>,
@@ -39,6 +65,10 @@ struct Builder {
 }
 
 impl Builder {
+    fn get(&self, id: VarId) -> Construct {
+        self.constructs[id]
+    }
+
     fn get_point(&self, id: VarId) -> Point {
         match self.constructs[id] {
             Construct::Point(c) => c,
@@ -68,11 +98,25 @@ impl Builder {
         if !rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
             self.selected_input = !0usize;
         } else if self.selected_input != !0usize {
-            self.inputs[self.selected_input] = mouse;
+            let sel = &self.inputs[self.selected_input];
+            self.inputs[self.selected_input].pos = match sel.kind {
+                InputKind::Free => mouse,
+                InputKind::Sect(id) => match self.get(id) {
+                    Construct::Point(pos) => pos,
+                    Construct::Line(Line { pos, dir }) => {
+                        pos + dir
+                            * pos.distance_to(mouse)
+                            * (dir.angle_to(Vector2::zero()) - mouse.angle_to(pos)).cos()
+                    }
+                    Construct::Circle(Circle { pos, radius }) => {
+                        pos + (mouse - pos).normalized() * radius
+                    }
+                },
+            }
         }
 
         for (i, input) in self.inputs.iter_mut().enumerate() {
-            if mouse.distance_to(*input) < 6.9 {
+            if mouse.distance_to(input.pos) < 6.9 {
                 if !rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
                     self.selected_input = i;
                 }
@@ -86,8 +130,8 @@ impl Builder {
     pub fn build(&mut self) {
         self.constructs.clear();
 
-        for &input in &self.inputs {
-            self.constructs.push(Construct::Point(input));
+        for input in &self.inputs {
+            self.constructs.push(Construct::Point(input.pos));
         }
 
         for &step in &self.steps {
@@ -134,9 +178,9 @@ impl Builder {
             }
         }
 
-        for (i, &input) in self.inputs.iter().enumerate() {
+        for (i, input) in self.inputs.iter().enumerate() {
             d.draw_circle_v(
-                input,
+                input.pos,
                 if i == self.selected_input { 7.0 } else { 5.0 },
                 Color::RED,
             );
@@ -149,14 +193,14 @@ fn main() {
 
     let mut builder = Builder {
         inputs: vec![
-            Vector2::new(50.0, 100.0),
-            Vector2::new(300.0, 300.0),
-            Vector2::new(300.0, 300.0),
+            Input::free(Vector2::new(50.0, 100.0)),
+            Input::sect(Vector2::new(250.0, 200.0), 4),
+            Input::free(Vector2::new(300.0, 300.0)),
         ],
         steps: vec![
-            Step::LineSectPoints(0, 1),
-            Step::CircAtSect(0, 2),
-            Step::LineSectPerp(1, 3),
+            Step::CircAtSect(0, 1),
+            Step::LineSectPoints(0, 2),
+            Step::LineSectPerp(2, 4),
         ],
         constructs: Vec::new(),
         selected_input: !0usize,
