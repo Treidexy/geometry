@@ -1,0 +1,5 @@
+given point A, point B, point C.
+
+let line a sect A,B.
+let line b sect B,C.
+let line c sect C,A.
