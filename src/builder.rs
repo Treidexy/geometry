@@ -3,33 +3,8 @@ use raylib::prelude::*;
 type VarId = usize;
 
 #[derive(Clone, Copy)]
-pub enum InputKind {
-    Free,
-    Sect(VarId),
-}
-
-pub struct Input {
-    pub pos: Vector2,
-    pub kind: InputKind,
-}
-
-impl Input {
-    pub fn free(pos: Vector2) -> Self {
-        Self {
-            pos,
-            kind: InputKind::Free,
-        }
-    }
-    pub fn sect(pos: Vector2, sect: VarId) -> Self {
-        Self {
-            pos,
-            kind: InputKind::Sect(sect),
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
 pub enum Step {
+    Point,
     LineSectPoints(VarId, VarId),
     CircAtSect(VarId, VarId),
     LineSectPerp(VarId, VarId), // pt, line
@@ -57,7 +32,6 @@ pub struct Circle {
 }
 
 pub struct Builder {
-    pub inputs: Vec<Input>,
     pub steps: Vec<Step>,
 
     constructs: Vec<Construct>,
@@ -67,7 +41,6 @@ pub struct Builder {
 impl Default for Builder {
     fn default() -> Self {
         Self {
-            inputs: Default::default(),
             steps: Default::default(),
             constructs: Default::default(),
             selected_input: Default::default(),
@@ -103,9 +76,8 @@ impl Builder {
 }
 
 impl Builder {
-    pub fn new(inputs: Vec<Input>, steps: Vec<Step>) -> Self {
+    pub fn new(steps: Vec<Step>) -> Self {
         Self {
-            inputs,
             steps,
 
             constructs: Vec::new(),
@@ -119,31 +91,17 @@ impl Builder {
         if !rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
             self.selected_input = !0usize;
         } else if self.selected_input != !0usize {
-            let sel = &self.inputs[self.selected_input];
-            self.inputs[self.selected_input].pos = match sel.kind {
-                InputKind::Free => mouse,
-                InputKind::Sect(id) => match self.get(id) {
-                    Construct::Point(pos) => pos,
-                    Construct::Line(Line { pos, dir }) => {
-                        pos + dir
-                            * pos.distance_to(mouse)
-                            * (dir.angle_to(Vector2::zero()) - mouse.angle_to(pos)).cos()
-                    }
-                    Construct::Circle(Circle { pos, radius }) => {
-                        pos + (mouse - pos).normalized() * radius
-                    }
-                },
-            }
+            // let sel = &self.inputs[self.selected_input];
         }
 
-        for (i, input) in self.inputs.iter_mut().enumerate() {
-            if mouse.distance_to(input.pos) < 6.9 {
-                if !rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
-                    self.selected_input = i;
-                }
-                break;
-            }
-        }
+        // for (i, input) in self.inputs.iter_mut().enumerate() {
+        //     if mouse.distance_to(input.pos) < 6.9 {
+        //         if !rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
+        //             self.selected_input = i;
+        //         }
+        //         break;
+        //     }
+        // }
 
         self.build();
     }
@@ -151,12 +109,12 @@ impl Builder {
     pub fn build(&mut self) {
         self.constructs.clear();
 
-        for input in &self.inputs {
-            self.constructs.push(Construct::Point(input.pos));
-        }
-
         for &step in &self.steps {
             match step {
+                Step::Point => {
+                    self.constructs
+                        .push(Construct::Point(Vector2::new(200.0, 200.0)));
+                }
                 Step::LineSectPoints(a, b) => {
                     self.constructs.push(Construct::Line(Line {
                         pos: self.get_point(a),
@@ -197,14 +155,6 @@ impl Builder {
                     d.draw_circle_lines(pos.x as i32, pos.y as i32, radius, Color::GOLD);
                 }
             }
-        }
-
-        for (i, input) in self.inputs.iter().enumerate() {
-            d.draw_circle_v(
-                input.pos,
-                if i == self.selected_input { 7.0 } else { 5.0 },
-                Color::RED,
-            );
         }
     }
 }
